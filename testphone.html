@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>顧客管理系統</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            text-align: center;
+            background-color: #f4f4f9;
+        }
+
+        input, button {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            font-size: 16px;
+            box-sizing: border-box; /* 防止padding影響寬度 */
+        }
+
+        .page {
+            display: none;
+        }
+
+        .active {
+            display: block;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 90%; /* 設定最大寬度，並自動縮放至手機螢幕 */
+            margin: 0 auto; /* 置中 */
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        h1, h2 {
+            color: #333;
+        }
+
+        .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        button {
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            padding: 10px 20px;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .customer {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+
+        input[type="text"], input[type="number"], input[type="date"] {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                width: 95%;
+            }
+        }
+
+    </style>
+</head>
+<body>
+
+<h1>顧客管理系統</h1>
+
+<!-- 切換按鈕 -->
+<div class="button-container">
+    <button onclick="showPage('addPage')">新增新顧客</button>
+    <button onclick="showPage('quickAddPage')">老顧客快速消費</button>
+    <button onclick="showPage('searchPage')">搜尋顧客</button>
+    <button onclick="downloadExcel()">下載Excel</button>
+</div>
+
+<!-- 新增新顧客頁 -->
+<div id="addPage" class="page active container">
+    <h2>新增新顧客資料</h2>
+    <form id="customerForm">
+        姓名：<input type="text" id="name" required><br>
+        電話：<input type="text" id="phone" required><br>
+        生日：<input type="date" id="birthday"><br>
+        LINE名稱：<input type="text" id="line_id"><br>
+        消費項目：<input type="text" id="purchase"><br>
+        消費金額：<input type="number" id="amount" min="0"><br>
+        <button type="submit">新增顧客</button>
+    </form>
+</div>
+
+<!-- 老顧客快速消費頁 -->
+<div id="quickAddPage" class="page container">
+    <h2>老顧客快速新增消費</h2>
+    搜尋（姓名、LINE、電話末三碼）：<input type="text" id="quickSearchInput">
+    <button onclick="quickSearch()">搜尋</button>
+
+    <div id="quickCustomerInfo" style="margin-top: 10px;"></div>
+
+    <div id="quickAddForm" style="display:none;">
+        消費項目：<input type="text" id="quickPurchase"><br>
+        消費金額：<input type="number" id="quickAmount" min="0"><br>
+        <button onclick="addQuickPurchase()">新增消費紀錄</button>
+    </div>
+</div>
+
+<!-- 搜尋顧客頁 -->
+<div id="searchPage" class="page container">
+    <h2>搜尋顧客</h2>
+    搜尋（姓名、電話或LINE名稱）：<input type="text" id="searchInput">
+    <button onclick="searchCustomer()">搜尋</button>
+
+    <div id="results"></div>
+</div>
+
+<script>
+let customers = JSON.parse(localStorage.getItem('customers')) || [];
+let currentCustomer = null;
+
+// 切換頁面
+function showPage(pageId) {
+    document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+    document.getElementById(pageId).classList.add('active');
+}
+
+// 新增新顧客
+document.getElementById('customerForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const name = document.getElementById('name').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const birthday = document.getElementById('birthday').value;
+    const lineName = document.getElementById('line_id').value.trim();
+    const purchase = document.getElementById('purchase').value.trim();
+    const amount = parseFloat(document.getElementById('amount').value) || 0;
+
+    let customer = customers.find(c => c.phone === phone);
+
+    if (customer) {
+        customer.purchases.push({ item: purchase, amount: amount });
+    } else {
+        customers.push({
+            name,
+            phone,
+            birthday,
+            lineName,
+            purchases: [{ item: purchase, amount: amount }]
+        });
+    }
+
+    localStorage.setItem('customers', JSON.stringify(customers));
+    alert('資料已儲存！');
+    document.getElementById('customerForm').reset();
+});
+
+// 老顧客搜尋
+function quickSearch() {
+    const query = document.getElementById('quickSearchInput').value.trim();
+    const infoDiv = document.getElementById('quickCustomerInfo');
+    infoDiv.innerHTML = '';
+    document.getElementById('quickAddForm').style.display = 'none';
+    currentCustomer = null;
+
+    const match = customers.find(c =>
+        c.name.includes(query) || 
+        (c.lineName && c.lineName.includes(query)) || 
+        (c.phone.endsWith(query))
+    );
+
+    if (match) {
+        currentCustomer = match;
+        infoDiv.innerHTML = `
+            <strong>姓名：</strong>${match.name}<br>
+            <strong>電話：</strong>${match.phone}<br>
+            <strong>生日：</strong>${match.birthday}<br>
+            <strong>LINE名稱：</strong>${match.lineName || ''}<br>
+        `;
+        document.getElementById('quickAddForm').style.display = 'block';
+    } else {
+        infoDiv.innerHTML = '找不到顧客，請確認輸入是否正確。';
+    }
+}
+
+// 老顧客新增消費
+function addQuickPurchase() {
+    const purchase = document.getElementById('quickPurchase').value.trim();
+    const amount = parseFloat(document.getElementById('quickAmount').value) || 0;
+
+    if (!currentCustomer) {
+        alert('請先搜尋顧客');
+        return;
+    }
+    if (!purchase) {
+        alert('請填寫消費項目');
+        return;
+    }
+
+    currentCustomer.purchases.push({ item: purchase, amount: amount });
+    localStorage.setItem('customers', JSON.stringify(customers));
+    alert('新增消費成功！');
+    document.getElementById('quickPurchase').value = '';
+    document.getElementById('quickAmount').value = '';
+}
+
+// 搜尋顧客（完整資料）
+function searchCustomer() {
+    const query = document.getElementById('searchInput').value.trim();
+    const resultDiv = document.getElementById('results');
+    resultDiv.innerHTML = '';
+
+    const matches = customers.filter(c => 
+        c.name.includes(query) || 
+        c.phone.includes(query) || 
+        (c.lineName && c.lineName.includes(query))
+    );
+
+    if (matches.length > 0) {
+        matches.forEach(c => {
+            const totalAmount = c.purchases.reduce((sum, p) => sum + p.amount, 0);
+            const div = document.createElement('div');
+            div.className = 'customer';
+            div.innerHTML = `
+                <strong>姓名：</strong>${c.name}<br>
+                <strong>電話：</strong>${c.phone}<br>
+                <strong>生日：</strong>${c.birthday}<br>
+                <strong>LINE名稱：</strong>${c.lineName || ''}<br>
+                <strong>消費紀錄：</strong><ul>${c.purchases.map(p => `<li>${p.item} - ${p.amount}元</li>`).join('')}</ul>
+                <strong>消費總金額：</strong>${totalAmount} 元
+            `;
+            resultDiv.appendChild(div);
+        });
+    } else {
+        resultDiv.innerText = '找不到資料';
+    }
+}
+
+// 下載Excel
+function downloadExcel() {
+    let data = [];
+
+    customers.forEach(c => {
+        const totalAmount = c.purchases.reduce((sum, p) => sum + p.amount, 0);
+        data.push({
+            '姓名': c.name,
+            '電話': c.phone,
+            '生日': c.birthday,
+            'LINE名稱': c.lineName,
+            '消費總金額': totalAmount,
+            '消費明細': c.purchases.map(p => `${p.item}(${p.amount}元)`).join(', ')
+        });
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "顧客資料");
+    XLSX.writeFile(wb, "顧客資料.xlsx");
+}
+</script>
+
+</body>
+</html>
